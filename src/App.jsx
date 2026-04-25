@@ -2,20 +2,19 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, BarChart, Bar, Cell } from "recharts";
 
 const SEED_TRADES = [
-  { id: 1, ticker: "TSLA", type: "CSP", strike: 220, expiry: "2026-01-17", premium: 4.20, contracts: 2, openDate: "2025-12-20", status: "closed", closeDate: "2025-12-31", closeOutcome: "expired", closePnl: 840, sharesAdded: 0, note: "Expired worthless" },
-  { id: 2, ticker: "AAPL", type: "CSP", strike: 190, expiry: "2026-02-07", premium: 2.85, contracts: 3, openDate: "2026-01-10", status: "closed", closeDate: "2026-02-07", closeOutcome: "assigned", closePnl: 855, sharesAdded: 300, costBasis: 190, note: "Assigned — bought 300 shares at $190" },
-  { id: 3, ticker: "TSLA", type: "CC", strike: 235, expiry: "2026-02-21", premium: 3.60, contracts: 2, openDate: "2026-01-20", status: "closed", closeDate: "2026-02-10", closeOutcome: "bought_back", closePnl: -180, sharesAdded: 0, note: "Bought back early" },
-  { id: 4, ticker: "NVDA", type: "CSP", strike: 115, expiry: "2026-03-07", premium: 3.10, contracts: 5, openDate: "2026-02-05", status: "closed", closeDate: "2026-03-07", closeOutcome: "expired", closePnl: 1550, sharesAdded: 0, note: "Expired worthless" },
-  { id: 5, ticker: "AAPL", type: "CC", strike: 200, expiry: "2026-03-21", premium: 2.20, contracts: 3, openDate: "2026-02-14", status: "closed", closeDate: "2026-03-15", closeOutcome: "called_away", closePnl: 420, sharesAdded: -300, note: "Shares called away at $200" },
-  { id: 6, ticker: "NVDA", type: "CSP", strike: 108, expiry: "2026-04-04", premium: 2.75, contracts: 5, openDate: "2026-03-10", status: "open", closeDate: null, closeOutcome: null, closePnl: null, sharesAdded: 0, note: "In progress" },
-  { id: 7, ticker: "TSLA", type: "CC", strike: 250, expiry: "2026-04-17", premium: 5.40, contracts: 2, openDate: "2026-03-22", status: "open", closeDate: null, closeOutcome: null, closePnl: null, sharesAdded: 0, note: "" },
+  { id: 1, ticker: "TSLA", type: "CSP", strike: 220, expiry: "2026-01-17", premium: 4.20, contracts: 2, openDate: "2025-12-20", status: "closed", closeDate: "2025-12-31", closeOutcome: "expired", closePnl: 840, brokerFee: 1.30, sharesAdded: 0, note: "Expired worthless" },
+  { id: 2, ticker: "AAPL", type: "CSP", strike: 190, expiry: "2026-02-07", premium: 2.85, contracts: 3, openDate: "2026-01-10", status: "closed", closeDate: "2026-02-07", closeOutcome: "assigned", closePnl: 855, brokerFee: 1.95, sharesAdded: 300, costBasis: 190, note: "Assigned" },
+  { id: 3, ticker: "TSLA", type: "CC", strike: 235, expiry: "2026-02-21", premium: 3.60, contracts: 2, openDate: "2026-01-20", status: "closed", closeDate: "2026-02-10", closeOutcome: "bought_back", closePnl: -180, brokerFee: 2.60, sharesAdded: 0, note: "Bought back early" },
+  { id: 4, ticker: "NVDA", type: "CSP", strike: 115, expiry: "2026-03-07", premium: 3.10, contracts: 5, openDate: "2026-02-05", status: "closed", closeDate: "2026-03-07", closeOutcome: "expired", closePnl: 1550, brokerFee: 3.25, sharesAdded: 0, note: "Expired worthless" },
+  { id: 5, ticker: "AAPL", type: "CC", strike: 200, expiry: "2026-03-21", premium: 2.20, contracts: 3, openDate: "2026-02-14", status: "closed", closeDate: "2026-03-15", closeOutcome: "called_away", closePnl: 420, brokerFee: 1.95, sharesAdded: -300, note: "Called away" },
+  { id: 6, ticker: "NVDA", type: "CSP", strike: 108, expiry: "2026-04-04", premium: 2.75, contracts: 5, openDate: "2026-03-10", status: "open", closeDate: null, closeOutcome: null, closePnl: null, brokerFee: 0, sharesAdded: 0, note: "In progress" },
+  { id: 7, ticker: "TSLA", type: "CC", strike: 250, expiry: "2026-04-17", premium: 5.40, contracts: 2, openDate: "2026-03-22", status: "open", closeDate: null, closeOutcome: null, closePnl: null, brokerFee: 0, sharesAdded: 0, note: "" },
 ];
 
 const SEED_SHARES = [
   { id: 10, ticker: "TSLA", shares: 200, costBasis: 218.50, acquiredDate: "2025-12-15", acquiredVia: "purchase", note: "Initial position" },
 ];
 
-const STARTING_CAPITAL = 50000;
 const STORAGE_KEY = "wheeldesk-data";
 const TICKER_COLORS = { AAPL: "#60a5fa", TSLA: "#f472b6", NVDA: "#a78bfa", SPY: "#34d399", MSFT: "#fb923c", AMZN: "#fbbf24" };
 const tc = (ticker) => TICKER_COLORS[ticker] || "#94a3b8";
@@ -30,29 +29,31 @@ const CLOSE_OUTCOMES = {
 const fmt$ = (v, sign = true) => {
   if (v === null || v === undefined) return "—";
   const s = sign && v > 0 ? "+" : "";
+  return `${s}$${Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
+const fmt$0 = (v, sign = true) => {
+  if (v === null || v === undefined) return "—";
+  const s = sign && v > 0 ? "+" : "";
   return `${s}$${Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 };
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" }) : "—";
 const today = () => new Date().toISOString().slice(0, 10);
 
+// net P&L after fees
+const netPnl = (t) => t.closePnl !== null ? t.closePnl - (t.brokerFee || 0) : null;
+
 function loadData() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch (_) {}
+  try { const raw = localStorage.getItem(STORAGE_KEY); if (raw) return JSON.parse(raw); } catch (_) {}
   return null;
 }
-
 function saveData(trades, shares) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ trades, shares }));
-  } catch (_) {}
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ trades, shares })); } catch (_) {}
 }
 
 // ─── Close Modal ──────────────────────────────────────────────────────────────
 const CloseModal = ({ trade, onClose, onSave }) => {
   const maxPrem = trade.premium * trade.contracts * 100;
-  const [form, setForm] = useState({ closeDate: today(), closeOutcome: "expired", closePnl: maxPrem, buybackCost: "", assignedCostBasis: trade.strike, note: "" });
+  const [form, setForm] = useState({ closeDate: today(), closeOutcome: "expired", closePnl: maxPrem, buybackCost: "", assignedCostBasis: trade.strike, brokerFee: trade.brokerFee || "", note: "" });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const handleOutcomeChange = (outcome) => {
@@ -65,11 +66,14 @@ const CloseModal = ({ trade, onClose, onSave }) => {
     let sharesAdded = 0, costBasis = null;
     if (outcome === "assigned")    { sharesAdded = trade.contracts * 100; costBasis = +form.assignedCostBasis; }
     if (outcome === "called_away") { sharesAdded = -(trade.contracts * 100); }
-    const finalPnl = outcome === "bought_back" ? maxPrem - (+form.buybackCost || 0) : +form.closePnl;
-    onSave({ ...trade, status: "closed", closeDate: form.closeDate, closeOutcome: outcome, closePnl: finalPnl, sharesAdded, costBasis, note: form.note || trade.note });
+    const grossPnl = outcome === "bought_back" ? maxPrem - (+form.buybackCost || 0) : +form.closePnl;
+    onSave({ ...trade, status: "closed", closeDate: form.closeDate, closeOutcome: outcome, closePnl: grossPnl, brokerFee: +form.brokerFee || 0, sharesAdded, costBasis, note: form.note || trade.note });
   };
 
   const outcomes = trade.type === "CSP" ? ["expired", "bought_back", "assigned"] : ["expired", "bought_back", "called_away"];
+  const fee = +form.brokerFee || 0;
+  const grossPnl = form.closeOutcome === "bought_back" ? (maxPrem - (+form.buybackCost || 0)) : (+form.closePnl || 0);
+  const estimatedNet = grossPnl - fee;
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -99,7 +103,7 @@ const CloseModal = ({ trade, onClose, onSave }) => {
             <div className="form-row">
               <label>Buyback Cost (total $)</label>
               <input type="number" value={form.buybackCost} onChange={e => set("buybackCost", e.target.value)} placeholder={`Premium collected was $${maxPrem}`} />
-              <div className="form-hint">P&L = ${maxPrem} collected − buyback cost</div>
+              <div className="form-hint">Gross P&L = ${maxPrem} collected − buyback cost</div>
             </div>
           )}
           {form.closeOutcome === "assigned" && (
@@ -111,8 +115,13 @@ const CloseModal = ({ trade, onClose, onSave }) => {
           {form.closeOutcome === "called_away" && <div className="info-box pink"><strong>📤 Called Away</strong> — {trade.contracts * 100} shares of {trade.ticker} will be removed from your holdings at ${trade.strike}/share.</div>}
           {form.closeOutcome === "expired" && <div className="info-box green"><strong>✓ Expired Worthless</strong> — Full premium of <strong>${maxPrem}</strong> is yours to keep.</div>}
           {(form.closeOutcome === "expired" || form.closeOutcome === "called_away" || form.closeOutcome === "assigned") && (
-            <div className="form-row"><label>Realized P&L ($)</label><input type="number" value={form.closePnl} onChange={e => set("closePnl", e.target.value)} /></div>
+            <div className="form-row"><label>Gross P&L ($)</label><input type="number" value={form.closePnl} onChange={e => set("closePnl", e.target.value)} /></div>
           )}
+          <div className="form-row">
+            <label>Broker Fee (total $)</label>
+            <input type="number" value={form.brokerFee} onChange={e => set("brokerFee", e.target.value)} placeholder="e.g. 1.30" step="0.01" />
+            {fee > 0 && <div className="form-hint">Net P&L after fee: <span style={{color: estimatedNet >= 0 ? "#10b981" : "#ef4444"}}>{fmt$(estimatedNet)}</span></div>}
+          </div>
           <div className="form-row"><label>Note (optional)</label><input value={form.note} onChange={e => set("note", e.target.value)} placeholder="Any notes..." /></div>
           <button className="save-btn" onClick={handleSave}>Confirm Close</button>
         </div>
@@ -123,11 +132,11 @@ const CloseModal = ({ trade, onClose, onSave }) => {
 
 // ─── Trade Modal ──────────────────────────────────────────────────────────────
 const TradeModal = ({ trade, onClose, onSave }) => {
-  const [form, setForm] = useState(trade || { ticker: "", type: "CSP", strike: "", expiry: "", premium: "", contracts: 1, openDate: today(), status: "open", closeDate: "", closeOutcome: null, closePnl: "", sharesAdded: 0, note: "" });
+  const [form, setForm] = useState(trade || { ticker: "", type: "CSP", strike: "", expiry: "", premium: "", contracts: 1, openDate: today(), status: "open", closeDate: "", closeOutcome: null, closePnl: "", brokerFee: 0, sharesAdded: 0, note: "" });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const handleSave = () => {
     if (!form.ticker || !form.strike || !form.expiry || !form.premium) return;
-    onSave({ ...form, id: form.id || Date.now(), strike: +form.strike, premium: +form.premium, contracts: +form.contracts, closePnl: form.closePnl === "" ? null : +form.closePnl, sharesAdded: +form.sharesAdded || 0 });
+    onSave({ ...form, id: form.id || Date.now(), strike: +form.strike, premium: +form.premium, contracts: +form.contracts, closePnl: form.closePnl === "" ? null : +form.closePnl, brokerFee: +form.brokerFee || 0, sharesAdded: +form.sharesAdded || 0 });
   };
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -148,7 +157,7 @@ const TradeModal = ({ trade, onClose, onSave }) => {
           </div>
           <div className="form-row two-col">
             <div><label>Open Date</label><input type="date" value={form.openDate} onChange={e => set("openDate", e.target.value)} /></div>
-            <div><label>Status</label><select value={form.status} onChange={e => set("status", e.target.value)}><option value="open">Open</option><option value="closed">Closed</option></select></div>
+            <div><label>Broker Fee ($)</label><input type="number" value={form.brokerFee || ""} onChange={e => set("brokerFee", e.target.value)} placeholder="0.00" step="0.01" /></div>
           </div>
           <div className="form-row"><label>Note</label><input value={form.note} onChange={e => set("note", e.target.value)} placeholder="Optional note..." /></div>
           <button className="save-btn" onClick={handleSave}>Save Trade</button>
@@ -181,9 +190,7 @@ const ShareModal = ({ position, onClose, onSave, onDelete }) => {
           </div>
           <div className="form-row"><label>Acquired Via</label>
             <select value={form.acquiredVia} onChange={e => set("acquiredVia", e.target.value)}>
-              <option value="purchase">Direct Purchase</option>
-              <option value="assignment">CSP Assignment</option>
-              <option value="other">Other</option>
+              <option value="purchase">Direct Purchase</option><option value="assignment">CSP Assignment</option><option value="other">Other</option>
             </select>
           </div>
           <div className="form-row"><label>Note</label><input value={form.note} onChange={e => set("note", e.target.value)} placeholder="Optional note..." /></div>
@@ -200,7 +207,7 @@ const ShareModal = ({ position, onClose, onSave, onDelete }) => {
 const EquityTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   const val = payload[0].value;
-  return <div className="chart-tooltip"><div className="tt-date">{label}</div><div className="tt-val" style={{ color: val >= STARTING_CAPITAL ? "#10b981" : "#ef4444" }}>${val.toLocaleString()}</div></div>;
+  return <div className="chart-tooltip"><div className="tt-date">{label}</div><div className="tt-val" style={{ color: "#10b981" }}>${val.toLocaleString()}</div></div>;
 };
 
 // ─── Main App ─────────────────────────────────────────────────────────────────
@@ -211,24 +218,31 @@ export default function App() {
   const [tab, setTab] = useState("dashboard");
   const [tradeFilter, setTradeFilter] = useState("all");
 
-  // Auto-save on every change
-  useEffect(() => {
-    saveData(trades, shares);
-  }, [trades, shares]);
+  useEffect(() => { saveData(trades, shares); }, [trades, shares]);
 
   const closedTrades = trades.filter(t => t.status === "closed" && t.closePnl !== null);
   const openTrades   = trades.filter(t => t.status === "open");
-  const totalPnl     = closedTrades.reduce((s, t) => s + t.closePnl, 0);
-  const wins         = closedTrades.filter(t => t.closePnl > 0);
-  const winRate      = closedTrades.length ? Math.round(wins.length / closedTrades.length * 100) : 0;
 
+  // Net P&L = gross P&L minus broker fees
+  const totalNetPnl   = closedTrades.reduce((s, t) => s + netPnl(t), 0);
+  const totalFees     = closedTrades.reduce((s, t) => s + (t.brokerFee || 0), 0);
+  const wins          = closedTrades.filter(t => netPnl(t) > 0);
+  const winRate       = closedTrades.length ? Math.round(wins.length / closedTrades.length * 100) : 0;
+
+  // Portfolio value = share holdings (at cost basis) + net premiums collected
+  const totalShareValue = shares.reduce((s, p) => s + p.shares * p.costBasis, 0);
+  const portfolioValue  = totalShareValue + totalNetPnl;
+
+  // Equity curve: starts at share cost basis, adds net P&L from each closed trade over time
   const equityCurve = useMemo(() => {
     const sorted = [...closedTrades].sort((a, b) => new Date(a.closeDate) - new Date(b.closeDate));
-    let running = STARTING_CAPITAL;
-    const pts = [{ date: "Start", value: STARTING_CAPITAL }];
-    sorted.forEach(t => { running += t.closePnl; pts.push({ date: fmtDate(t.closeDate), value: running }); });
+    // baseline = current share holdings cost
+    const baseline = shares.reduce((s, p) => s + p.shares * p.costBasis, 0);
+    let running = baseline;
+    const pts = [{ date: "Start", value: baseline }];
+    sorted.forEach(t => { running += netPnl(t); pts.push({ date: fmtDate(t.closeDate), value: Math.round(running) }); });
     return pts;
-  }, [closedTrades]);
+  }, [closedTrades, shares]);
 
   const sharesByTicker = useMemo(() => {
     const map = {};
@@ -256,7 +270,7 @@ export default function App() {
     setModal(null);
   }, []);
 
-  const saveShare  = useCallback((p) => { setShares(prev => prev.find(x => x.id === p.id) ? prev.map(x => x.id === p.id ? p : x) : [...prev, p]); setModal(null); }, []);
+  const saveShare   = useCallback((p) => { setShares(prev => prev.find(x => x.id === p.id) ? prev.map(x => x.id === p.id ? p : x) : [...prev, p]); setModal(null); }, []);
   const deleteShare = useCallback((id) => { setShares(prev => prev.filter(p => p.id !== id)); setModal(null); }, []);
   const deleteTrade = useCallback((id) => { if (window.confirm("Delete this trade?")) setTrades(prev => prev.filter(t => t.id !== id)); }, []);
 
@@ -285,7 +299,7 @@ export default function App() {
         .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:20px; }
         .stat { background:var(--surf); border:1px solid var(--border); border-radius:12px; padding:16px 18px; }
         .stat-label { font-size:9px; color:var(--muted); letter-spacing:1.5px; text-transform:uppercase; margin-bottom:8px; }
-        .stat-val { font-family:'Syne',sans-serif; font-size:24px; font-weight:800; line-height:1; }
+        .stat-val { font-family:'Syne',sans-serif; font-size:22px; font-weight:800; line-height:1; }
         .stat-sub { font-size:10px; color:var(--muted); margin-top:5px; }
         .green { color:#10b981; } .red { color:#ef4444; } .amber { color:#f59e0b; } .blue-c { color:#60a5fa; }
         .card { background:var(--surf); border:1px solid var(--border); border-radius:12px; padding:20px; margin-bottom:16px; }
@@ -299,9 +313,9 @@ export default function App() {
         .pill { background:none; border:1px solid var(--border); color:var(--muted); font-family:'DM Mono'; font-size:10px; padding:4px 12px; border-radius:20px; cursor:pointer; transition:all .15s; }
         .pill.active { border-color:#10b981; color:#10b981; }
         .tbl-wrap { background:var(--surf); border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px; overflow-x:auto; }
-        table { width:100%; border-collapse:collapse; font-size:12px; min-width:580px; }
-        th { text-align:left; padding:8px 14px; color:var(--muted); font-size:9px; letter-spacing:1.2px; text-transform:uppercase; border-bottom:1px solid var(--border); font-weight:500; white-space:nowrap; }
-        td { padding:11px 14px; border-bottom:1px solid #0f1a26; vertical-align:middle; }
+        table { width:100%; border-collapse:collapse; font-size:12px; min-width:640px; }
+        th { text-align:left; padding:8px 12px; color:var(--muted); font-size:9px; letter-spacing:1.2px; text-transform:uppercase; border-bottom:1px solid var(--border); font-weight:500; white-space:nowrap; }
+        td { padding:10px 12px; border-bottom:1px solid #0f1a26; vertical-align:middle; }
         tr:last-child td { border-bottom:none; }
         tbody tr:hover td { background:rgba(16,185,129,.03); }
         .ticker { font-family:'Syne',sans-serif; font-weight:800; font-size:13px; }
@@ -312,6 +326,7 @@ export default function App() {
         .dot { display:inline-block; width:6px; height:6px; border-radius:50%; margin-right:5px; }
         .dot-open { background:#f59e0b; box-shadow:0 0 5px #f59e0b80; }
         .dot-closed { background:var(--muted); }
+        .fee-chip { font-size:9px; color:#ef4444; background:rgba(239,68,68,.1); border-radius:3px; padding:1px 5px; }
         .act { display:flex; gap:6px; }
         .act-btn { background:none; border:1px solid var(--border); color:var(--muted); font-size:10px; padding:3px 9px; border-radius:5px; cursor:pointer; transition:all .15s; font-family:'DM Mono'; white-space:nowrap; }
         .act-btn:hover { border-color:#10b981; color:#10b981; }
@@ -376,15 +391,33 @@ export default function App() {
           ))}
         </div>
 
+        {/* ══ DASHBOARD ══ */}
         {tab === "dashboard" && (<>
           <div className="stats">
-            <div className="stat"><div className="stat-label">Realized P&L</div><div className={`stat-val ${totalPnl >= 0 ? "green" : "red"}`}>{fmt$(totalPnl)}</div><div className="stat-sub">{((totalPnl/STARTING_CAPITAL)*100).toFixed(1)}% on ${(STARTING_CAPITAL/1000).toFixed(0)}k capital</div></div>
-            <div className="stat"><div className="stat-label">Win Rate</div><div className="stat-val amber">{winRate}%</div><div className="stat-sub">{wins.length} / {closedTrades.length} closed</div></div>
-            <div className="stat"><div className="stat-label">Open Options</div><div className="stat-val" style={{color:"#f59e0b"}}>{openTrades.length}</div><div className="stat-sub">Max: {fmt$(openTrades.reduce((s,t)=>s+t.premium*t.contracts*100,0),false)}</div></div>
-            <div className="stat"><div className="stat-label">Shares Held</div><div className="stat-val blue-c">{shares.reduce((s,p)=>s+p.shares,0)}</div><div className="stat-sub">{[...new Set(shares.map(p=>p.ticker))].join(", ") || "none"}</div></div>
+            <div className="stat">
+              <div className="stat-label">Portfolio Value</div>
+              <div className="stat-val blue-c">{fmt$0(portfolioValue, false)}</div>
+              <div className="stat-sub">{fmt$0(totalShareValue, false)} shares + {fmt$(totalNetPnl)} premiums</div>
+            </div>
+            <div className="stat">
+              <div className="stat-label">Net Premium P&L</div>
+              <div className={`stat-val ${totalNetPnl >= 0 ? "green" : "red"}`}>{fmt$(totalNetPnl)}</div>
+              <div className="stat-sub" style={{color:"#ef444480"}}>{fmt$(-totalFees, false)} in fees</div>
+            </div>
+            <div className="stat">
+              <div className="stat-label">Win Rate</div>
+              <div className="stat-val amber">{winRate}%</div>
+              <div className="stat-sub">{wins.length} / {closedTrades.length} closed</div>
+            </div>
+            <div className="stat">
+              <div className="stat-label">Open Options</div>
+              <div className="stat-val" style={{color:"#f59e0b"}}>{openTrades.length}</div>
+              <div className="stat-sub">Max: {fmt$0(openTrades.reduce((s,t)=>s+t.premium*t.contracts*100,0),false)}</div>
+            </div>
           </div>
+
           <div className="card">
-            <div className="card-title">Equity Curve — Realized Cash</div>
+            <div className="card-title">Portfolio Value Over Time — Shares + Net Premiums</div>
             <ResponsiveContainer width="100%" height={210}>
               <AreaChart data={equityCurve} margin={{top:8,right:8,left:0,bottom:0}}>
                 <defs><linearGradient id="eg" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.25}/><stop offset="95%" stopColor="#10b981" stopOpacity={0}/></linearGradient></defs>
@@ -392,28 +425,29 @@ export default function App() {
                 <XAxis dataKey="date" tick={{fill:"#3d5470",fontSize:9,fontFamily:"DM Mono"}} axisLine={false} tickLine={false}/>
                 <YAxis tick={{fill:"#3d5470",fontSize:9,fontFamily:"DM Mono"}} axisLine={false} tickLine={false} tickFormatter={v=>`$${(v/1000).toFixed(0)}k`}/>
                 <Tooltip content={<EquityTooltip/>}/>
-                <ReferenceLine y={STARTING_CAPITAL} stroke="#1b2a3b" strokeDasharray="4 4"/>
                 <Area type="monotone" dataKey="value" stroke="#10b981" strokeWidth={2} fill="url(#eg)" dot={{r:4,fill:"#10b981",strokeWidth:0}} activeDot={{r:6}}/>
               </AreaChart>
             </ResponsiveContainer>
           </div>
+
           <div className="card">
-            <div className="card-title">P&L per Closed Trade</div>
+            <div className="card-title">Net P&L per Closed Trade (after fees)</div>
             <ResponsiveContainer width="100%" height={150}>
-              <BarChart data={[...closedTrades].sort((a,b)=>new Date(a.closeDate)-new Date(b.closeDate)).map(t=>({name:`${t.ticker} ${t.type}`,pnl:t.closePnl,win:t.closePnl>=0}))} margin={{top:8,right:8,left:0,bottom:0}}>
+              <BarChart data={[...closedTrades].sort((a,b)=>new Date(a.closeDate)-new Date(b.closeDate)).map(t=>({name:`${t.ticker} ${t.type}`,pnl:netPnl(t)}))} margin={{top:8,right:8,left:0,bottom:0}}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1b2a3b" vertical={false}/>
                 <XAxis dataKey="name" tick={{fill:"#3d5470",fontSize:8,fontFamily:"DM Mono"}} axisLine={false} tickLine={false}/>
                 <YAxis tick={{fill:"#3d5470",fontSize:9,fontFamily:"DM Mono"}} axisLine={false} tickLine={false} tickFormatter={v=>`$${v}`}/>
-                <Tooltip formatter={v=>[`$${v}`,"P&L"]} contentStyle={{background:"#131f30",border:"1px solid #1b2a3b",borderRadius:8,fontFamily:"DM Mono",fontSize:11}}/>
+                <Tooltip formatter={v=>[`$${Number(v).toFixed(2)}`,"Net P&L"]} contentStyle={{background:"#131f30",border:"1px solid #1b2a3b",borderRadius:8,fontFamily:"DM Mono",fontSize:11}}/>
                 <ReferenceLine y={0} stroke="#1b2a3b"/>
                 <Bar dataKey="pnl" radius={[4,4,0,0]}>
-                  {[...closedTrades].sort((a,b)=>new Date(a.closeDate)-new Date(b.closeDate)).map((t,i)=><Cell key={i} fill={t.closePnl>=0?"#10b981":"#ef4444"}/>)}
+                  {[...closedTrades].sort((a,b)=>new Date(a.closeDate)-new Date(b.closeDate)).map((t,i)=><Cell key={i} fill={netPnl(t)>=0?"#10b981":"#ef4444"}/>)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
         </>)}
 
+        {/* ══ OPEN OPTIONS ══ */}
         {tab === "open" && (<>
           <div className="sec-hdr"><div className="sec-title">Open Options ({openTrades.length})</div></div>
           {openTrades.length === 0 && <div className="card empty">No open positions. Hit "+ New Trade" to add one.</div>}
@@ -429,8 +463,9 @@ export default function App() {
                     <div><div className="oc-ticker" style={{color:tc(t.ticker)}}>{t.ticker}</div><div className="oc-meta">{t.type} · ${t.strike} strike · {t.contracts}x</div></div>
                     <span className={`badge ${t.type==="CSP"?"badge-csp":"badge-cc"}`}>{t.type}</span>
                   </div>
-                  <div className="oc-prem">{fmt$(maxColl,false)}</div>
+                  <div className="oc-prem">{fmt$0(maxColl,false)}</div>
                   <div className="oc-sub">max premium · ${t.premium}/share</div>
+                  {t.brokerFee > 0 && <div style={{marginTop:4,fontSize:10,color:"#ef4444"}}>Fee: ${t.brokerFee.toFixed(2)}</div>}
                   {t.type==="CC" && sharesHeld>0 && <div style={{marginTop:6,fontSize:10,color:"#60a5fa"}}>Covered by {sharesHeld} shares held</div>}
                   {t.type==="CSP" && <div style={{marginTop:6,fontSize:10,color:"#3d5470"}}>Cash secured: ${(t.strike*t.contracts*100).toLocaleString()}</div>}
                   <div style={{marginTop:12,display:"flex",justifyContent:"space-between",fontSize:10,color:"#3d5470"}}>
@@ -447,6 +482,7 @@ export default function App() {
           </div>
         </>)}
 
+        {/* ══ SHARE HOLDINGS ══ */}
         {tab === "shares" && (<>
           <div className="sec-hdr">
             <div className="sec-title">Share Holdings ({shares.reduce((s,p)=>s+p.shares,0)} shares)</div>
@@ -462,7 +498,7 @@ export default function App() {
                     <div><div className="sc-ticker" style={{color:tc(p.ticker)}}>{p.ticker}</div><div className="sc-meta">{p.shares} shares · ${p.costBasis.toFixed(2)}/share</div></div>
                     <span className="via-badge">{p.acquiredVia}</span>
                   </div>
-                  <div className="sc-value">{fmt$(p.shares*p.costBasis,false)}</div>
+                  <div className="sc-value">{fmt$0(p.shares*p.costBasis,false)}</div>
                   <div className="sc-sub">total cost basis · {fmtDate(p.acquiredDate)}</div>
                   {openCCs.length>0 && <div style={{marginTop:8,fontSize:10,color:"#f59e0b"}}>{openCCs.length} open CC{openCCs.length>1?"s":""} against this position</div>}
                   {p.note && <div style={{marginTop:6,fontSize:10,color:"#3d5470",fontStyle:"italic"}}>{p.note}</div>}
@@ -481,7 +517,7 @@ export default function App() {
                       <td><span className="ticker" style={{color:tc(p.ticker)}}>{p.ticker}</span></td>
                       <td>{p.shares.toLocaleString()}</td>
                       <td>${p.costBasis.toFixed(2)}</td>
-                      <td className="blue-c">{fmt$(p.shares*p.costBasis,false)}</td>
+                      <td className="blue-c">{fmt$0(p.shares*p.costBasis,false)}</td>
                       <td><span className="via-badge">{p.acquiredVia}</span></td>
                       <td style={{color:"#3d5470"}}>{fmtDate(p.acquiredDate)}</td>
                       <td><div className="act">
@@ -496,6 +532,7 @@ export default function App() {
           )}
         </>)}
 
+        {/* ══ TRADE LOG ══ */}
         {tab === "trades" && (<>
           <div className="sec-hdr">
             <div className="sec-title">Trade Log ({trades.length})</div>
@@ -503,10 +540,11 @@ export default function App() {
           </div>
           <div className="tbl-wrap">
             <table>
-              <thead><tr><th>Ticker</th><th>Type</th><th>Strike</th><th>Expiry</th><th>Contracts</th><th>Premium</th><th>Outcome</th><th>P&L</th><th></th></tr></thead>
+              <thead><tr><th>Ticker</th><th>Type</th><th>Strike</th><th>Expiry</th><th>Contracts</th><th>Premium</th><th>Fee</th><th>Outcome</th><th>Net P&L</th><th></th></tr></thead>
               <tbody>
                 {displayTrades.map(t=>{
                   const oc = t.closeOutcome ? CLOSE_OUTCOMES[t.closeOutcome] : null;
+                  const np = netPnl(t);
                   return (
                     <tr key={t.id}>
                       <td><span className="ticker" style={{color:tc(t.ticker)}}>{t.ticker}</span></td>
@@ -514,9 +552,10 @@ export default function App() {
                       <td>${t.strike}</td>
                       <td style={{color:"#3d5470"}}>{fmtDate(t.expiry)}</td>
                       <td>{t.contracts}</td>
-                      <td>${t.premium} <span style={{color:"#3d5470",fontSize:9}}>({fmt$(t.premium*t.contracts*100,false)})</span></td>
+                      <td>${t.premium} <span style={{color:"#3d5470",fontSize:9}}>({fmt$0(t.premium*t.contracts*100,false)})</span></td>
+                      <td>{t.brokerFee > 0 ? <span className="fee-chip">-${t.brokerFee.toFixed(2)}</span> : <span style={{color:"#3d5470"}}>—</span>}</td>
                       <td>{t.status==="open"?<><span className="dot dot-open"/>open</>:oc?<span className="outcome-chip" style={{background:oc.color+"18",color:oc.color}}>{oc.icon} {oc.label}</span>:<><span className="dot dot-closed"/>closed</>}</td>
-                      <td className={t.closePnl>0?"green":t.closePnl<0?"red":""}>{fmt$(t.closePnl)}</td>
+                      <td className={np>0?"green":np<0?"red":""}>{fmt$(np)}</td>
                       <td><div className="act">
                         <button className="act-btn" onClick={()=>setModal({type:"editTrade",data:t})}>edit</button>
                         {t.status==="open"&&<button className="act-btn tbl-close" onClick={()=>setModal({type:"closeTrade",data:t})}>close</button>}
